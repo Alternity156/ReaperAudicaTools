@@ -6,7 +6,7 @@ All these tools require python 3, and python must be actived in REAPER's Reascri
 These tools also use the project RPP for various stuff, so you will have to use them on a saved project, they will not work properly if the project never has been saved. In the case of audica_maker.py, you will want a recent save.
 
 # audica_maker.py
-This will make an audica file. This is currently a bit buggy, you might have to retry to make the audica file with render disabled after the first try.
+This will make an audica file. Assumes you are using the template rpp. If you want to use your own template, for now you can edit the track names in the script. I may add a way to edit this in the GUI in the future.
 
 This script requires ogg2mogg.exe.
 
