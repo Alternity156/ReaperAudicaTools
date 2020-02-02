@@ -794,28 +794,9 @@ class mainApp(Frame):
         self.sample_rate_label = Label(self.tab3, text="Hz")
         self.sample_rate_label.grid(row=2, column=2, sticky="W")
 
-        self.render_wait_time_label = Label(self.tab3, text="Render wait time: ")
-        self.render_wait_time_label.grid(row=3, column=0)
-
-        self.render_wait_time_entry_var = StringVar()
-        self.render_wait_time_entry_var.set(30.0)
-        self.render_wait_time_entry = Entry(self.tab3, textvariable=self.render_wait_time_entry_var)
-        self.render_wait_time_entry.grid(row=3, column=1, columnspan=2)
-
         self.save_settings_button = Button(self.tab3, text="Save Settings", command=self.save_settings)
         self.save_settings_button.grid(row=5, columnspan=3)
 
-        self.render_wait_time_explaination = Label(self.tab3, text="Render wait time is the time to wait to start the\n" \
-                                                                   "next render. This time includes the render time of\n" \
-                                                                   "the next audio file that will be rendered and time to\n" \
-                                                                   "open and close REAPER. Until I find a better way\n" \
-                                                                   "to render, this is what works. During this wait\n" \
-                                                                   "time, your REAPER instance will freeze, along with\n" \
-                                                                   "this window, so don't be alarmed.\n\n" \
-                                                                   "If the render wait time is too short, the process will\n" \
-                                                                   "either crash, or not work properly. The time will vary\n" \
-                                                                   "depending on your machine and your project.")
-        self.render_wait_time_explaination.grid(row=7, columnspan=3, sticky="W")
 
         """
         Final notebook setup
@@ -980,22 +961,14 @@ class mainApp(Frame):
             sustains_moggsong.save_file_r(sustain_r_moggsong_filename)
 
         desc_file.save_desc_file(desc_filename)
-        processes = []
 
         if self.dont_render_checkbox_var.get() == 0:
-            p1 = ogg2mogg(main_ogg_filename, main_mogg_filename)
-            processes.append(p1)
+            ogg2mogg(main_ogg_filename, main_mogg_filename)
             if extras_checkbox == 1:
-                p2 = ogg2mogg(extras_ogg_filename, extras_mogg_filename)
-                processes.append(p2)
+                ogg2mogg(extras_ogg_filename, extras_mogg_filename)
             if sustains_checkbox == 1:
-                p3 = ogg2mogg(sustain_l_ogg_filename, sustain_l_mogg_filename)
-                p4 = ogg2mogg(sustain_r_ogg_filename, sustain_r_mogg_filename)
-                processes.append(p3)
-                processes.append(p4)
-
-        for p in processes:
-            p.kill()
+                ogg2mogg(sustain_l_ogg_filename, sustain_l_mogg_filename)
+                ogg2mogg(sustain_r_ogg_filename, sustain_r_mogg_filename)
 
         audica_filename = os.path.dirname(project_path) + os.sep + self.song_id_entry_var.get() + ".audica"
 
@@ -1040,14 +1013,7 @@ class mainApp(Frame):
     def warning_popup(self):
         self.warning = Toplevel()
 
-        self.warning_label_1 = Label(self.warning, text="Your main instance of REAPER and this script will freeze\n" \
-                                                        "for the wait time set in seconds times the number of audio\n" \
-                                                        "files to render, for example: If you render sustains and\n" \
-                                                        "main audio with a 20 seconds wait time, they will freeze for\n" \
-                                                        "60 seconds.")
-        self.warning_label_1.grid(row=0)
-
-        self.warning_label_2 = Label(self.warning, text="You will aslo be asked to export your MIDI file,\n" \
+        self.warning_label_2 = Label(self.warning, text="You will be asked to export your MIDI file,\n" \
                                                         "it needs to be in the same folder as your project with the\n" \
                                                         "same filename as your project, but .mid instead of .rpp.")
         self.warning_label_2.grid(row=1)
@@ -1067,9 +1033,13 @@ class mainApp(Frame):
         project_rpp = get_curr_project_filename()
         rpp = rppHandler(project_rpp)
         main_audio_rpp = project_rpp.replace(".rpp", "_main.rpp")
+        main_audio_ogg = project_rpp.replace(".rpp", ".ogg")
         extras_audio_rpp = project_rpp.replace(".rpp", "_extras.rpp")
+        extras_audio_ogg = project_rpp.replace(".rpp", "_extras.ogg")
         sustain_l_audio_rpp = project_rpp.replace(".rpp", "_sustain_l.rpp")
+        sustain_l_audio_ogg = project_rpp.replace(".rpp", "_sustain_l.ogg")
         sustain_r_audio_rpp = project_rpp.replace(".rpp", "_sustain_r.rpp")
+        sustain_r_audio_ogg = project_rpp.replace(".rpp", "_sustain_r.ogg")
         files_to_render = []
         rpp.change_render_settings(self.get_audio_quality_string())
         rpp.set_sample_rate_and_channels(self.sample_rate_dropdown_var.get(), "2")
@@ -1078,13 +1048,13 @@ class mainApp(Frame):
         rpp.mute_track(left_sustain_track_name)
         rpp.mute_track(right_sustain_track_name)
         rpp.unmute_track(main_audio_track_name)
-        rpp.set_file_render_path(main_audio_rpp.replace("_main.rpp", ".ogg"))
+        rpp.set_file_render_path(main_audio_ogg)
         rpp.save_data(main_audio_rpp)
         files_to_render.append(main_audio_rpp)
         if extras == 1:
             rpp.mute_track(main_audio_track_name)
             rpp.unmute_track(extras_audio_track_name)
-            rpp.set_file_render_path(extras_audio_rpp.replace(".rpp", ".ogg"))
+            rpp.set_file_render_path(extras_audio_ogg)
             rpp.save_data(extras_audio_rpp)
             files_to_render.append(extras_audio_rpp)
         if sustains == 1:
@@ -1092,12 +1062,12 @@ class mainApp(Frame):
             rpp.mute_track(main_audio_track_name)
             rpp.mute_track(extras_audio_track_name)
             rpp.unmute_track(left_sustain_track_name)
-            rpp.set_file_render_path(sustain_l_audio_rpp.replace(".rpp", ".ogg"))
+            rpp.set_file_render_path(sustain_l_audio_ogg)
             rpp.save_data(sustain_l_audio_rpp)
             files_to_render.append(sustain_l_audio_rpp)
             rpp.mute_track(left_sustain_track_name)
             rpp.unmute_track(right_sustain_track_name)
-            rpp.set_file_render_path(sustain_r_audio_rpp.replace(".rpp", ".ogg"))
+            rpp.set_file_render_path(sustain_r_audio_ogg)
             rpp.save_data(sustain_r_audio_rpp)
             files_to_render.append(sustain_r_audio_rpp)
         reaper_path = get_reaper_install_dir() + os.sep + "reaper.exe"
@@ -1105,7 +1075,33 @@ class mainApp(Frame):
         for project in files_to_render:
             p = Popen("\"" + reaper_path + "\" -nosplash -renderproject \"" + project + "\"")
             processes.append(p)
-            time.sleep(float(self.render_wait_time_entry_var.get()))
+            if "_main.rpp" in project:
+                filename = main_audio_ogg
+            else:
+                filename = project.replace(".rpp", ".ogg")
+            try:
+                last_modified = os.path.getmtime(filename)
+            except:
+                last_modified = 0
+            changing = False
+            while True:
+                try:
+                    modified = os.path.getmtime(filename)
+                except:
+                    modified = 0
+                if modified == 0:
+                    pass
+                else:
+                    if last_modified != modified:
+                        changing = True
+                    if changing:
+                        if last_modified == modified:
+                            time.sleep(1)
+                            p.kill()
+                            time.sleep(1)
+                            break
+                last_modified = modified
+                time.sleep(0.5)
         for p in processes:
             p.kill()
         os.remove(main_audio_rpp)
@@ -1124,7 +1120,6 @@ class mainApp(Frame):
                 "render_extras_audio": self.render_extras_checkbox_var.get(),
                 "render_sustain_audio": self.render_sustains_checkbox_var.get(),
                 "sample_rate": self.sample_rate_dropdown_var.get(),
-                "render_wait_time": self.render_wait_time_entry_var.get(),
                 "warning_popup": self.warning_checkbox_var.get()
                 }
         with open(self.settings_file, "w") as f:
@@ -1138,7 +1133,6 @@ class mainApp(Frame):
         self.render_extras_checkbox_var.set(data["render_extras_audio"])
         self.render_sustains_checkbox_var.set(data["render_sustain_audio"])
         self.sample_rate_dropdown_var.set(data["sample_rate"])
-        self.render_wait_time_entry_var.set(data["render_wait_time"])
         self.warning_checkbox_var.set(data["warning_popup"])
 
     def save_metadata(self):
