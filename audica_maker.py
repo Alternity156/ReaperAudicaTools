@@ -15,6 +15,7 @@ from reaper_python import *
 from tkinter import Tk, Frame, LabelFrame, Label, Entry, Button, Scale, Checkbutton, OptionMenu, \
     IntVar, StringVar, Toplevel, font, HORIZONTAL
 
+from collections import OrderedDict
 from tkinter.ttk import Notebook
 from subprocess import Popen
 from zipfile import ZipFile
@@ -73,6 +74,12 @@ REAPER command IDs
 """
 
 file_export_project_midi = 40849
+
+"""
+Misc settings
+"""
+
+ticks_per_quarter = 480
 
 """
 Function to post messages in the REAPER console. Use that often, REAPER mostly don't show crash reports.
@@ -298,6 +305,53 @@ class extras:
         f.close()
 
 
+class cues:
+
+    def __init__(self):
+        self.cues = []
+        self.repeaters = []
+        self.tempos = []
+        self.targetSpeed = 1.0
+
+    def add_cue(self, tick=0, tickLength=120, pitch=0, velocity=20, xOffset=0.0, yOffset=0.0, zOffset=0.0, handType=0,
+                behavior=0):
+        cue = {"tick": tick,
+               "tickLength": tickLength,
+               "pitch": pitch,
+               "velocity": velocity,
+               "gridOffset": {"x": xOffset, "y": yOffset},
+               "zOffset": zOffset,
+               "handType": handType,
+               "behavior": behavior}
+
+        self.cues.append(cue)
+
+    def add_repeater(self, tick=0, tickLength=120, pitch=0, velocity=20, handType=0):
+        repeater = {"handType": handType,
+                    "tick": tick,
+                    "tickLength": tickLength,
+                    "pitch": pitch,
+                    "velocity": velocity}
+
+        self.repeaters.append(repeater)
+
+    def add_tempo(self, tick=0, tempo=0):
+        t = {"tempo": tempo,
+             "tick": tick}
+
+        self.tempos.append(t)
+
+    def save(self, file):
+        sort = ['tick', 'tickLength', 'pitch', 'velocity', 'gridOffset', 'zOffset', 'handType', 'behavior']
+        cuesSorted = [OrderedDict(sorted(item.items(), key=lambda item: sort.index(item[0]))) for item in self.cues]
+        data = {"cues": sorted(cuesSorted, key=lambda x: x['tick']),
+                "repeaters": self.repeaters,
+                "tempos": self.tempos,
+                "targetSpeed": self.targetSpeed}
+        with open(file, "w") as f:
+            json.dump(data, f, indent=4)
+
+
 """
 Class to handle what needs to be done with rpp files.
 
@@ -438,9 +492,181 @@ def ogg2mogg(input, output):
     Popen("\"" + ogg2mogg_path + "\" \"" + input + "\" \"" + output + "\"")
 
 
-def test():
-    msg(ogg2mogg("D:\\Audica Customs\\Projects\\Rush - Tom Sawyer\\tomsawyer.ogg",
-                 "D:\\Audica Customs\\Projects\\Rush - Tom Sawyer\\tomsawyer.mogg"))
+def get_tracks_matching_names(match_strings):
+    tracks = []
+    tracknames = []
+    for i in range(RPR_CountTracks(0)):
+        retval, track, trackname, buffer_size = RPR_GetTrackName(RPR_GetTrack(0, i), "", 100)
+        for s in match_strings:
+            if s in trackname:
+                if "LH" in trackname or "RH" in trackname or "Melee" in trackname:
+                    tracks.append(track)
+                    tracknames.append(trackname)
+    return tracks, tracknames
+
+
+def seconds_to_ticks(seconds, difficulty):
+    ticks = 0
+    tracks = get_tracks_matching_names([difficulty])
+    temp_ticks = RPR_MIDI_GetPPQPosFromProjTime(RPR_GetMediaItemTake(RPR_GetTrackMediaItem(tracks[0][0], 0), 0), seconds)
+    if temp_ticks != -1:
+        ticks = temp_ticks
+    return ticks
+
+
+def is_sustain(tick, end_tick):
+    return end_tick - tick > ticks_per_quarter
+
+
+def is_melee(pitch):
+    return 98 <= pitch <= 101
+
+
+def is_chain_node(channel):
+    return channel == 4
+
+
+def is_chain(channel):
+    return channel == 3
+
+
+def is_horizontal(channel):
+    return channel == 1
+
+
+def is_vertical(channel):
+    return channel == 2
+
+
+"""
+MIDI events will be returned in 3 lists. 0 = Left hand, 1 = Right hand and 2 = Melees
+Every event in each list has this data:
+0-  Pitch
+1-  Velocity
+2-  Tick
+3-  TickLength
+4-  Channel
+5-  CC16 Value
+6-  CC17 Value
+7-  CC18 Value
+8-  CC19 Value
+9-  CC20 Value
+10- CC21 Value
+"""
+
+
+def get_midi_events(tracks):
+    lh_events = []
+    rh_events = []
+    melee_events = []
+    for track in tracks:
+        retval, take, note_count, cc_count, text_count = RPR_MIDI_CountEvts(RPR_GetMediaItemTake(RPR_GetTrackMediaItem(track, 0), 0), 0, 0, 0)
+        retval4, _, trackname, buffer_size = RPR_GetTrackName(track, "", 100)
+        for i in range(note_count):
+            retval2, _, note_index, note_selected, note_muted, note_start_tick, note_end_tick, note_channel, pitch, velocity = RPR_MIDI_GetNote(take, i, 0, 0, 0, 0, 0, 0, 0)
+            cc16 = -1
+            cc17 = -1
+            cc18 = -1
+            cc19 = -1
+            cc20 = -1
+            cc21 = -1
+            for j in range(cc_count):
+                reval3, _, cc_index, cc_selected, cc_muted, cc_tick, cc_channel_message, cc_channel, cc_number, cc_value = RPR_MIDI_GetCC(take, j, 0, 0, 0, 0, 0, 0, 0)
+                if cc_tick == note_start_tick:
+                    if cc_number == 16:
+                        cc16 = cc_value
+                    elif cc_number == 17:
+                        cc17 = cc_value
+                    elif cc_number == 18:
+                        cc18 = cc_value
+                    elif cc_number == 19:
+                        cc19 = cc_value
+                    elif cc_number == 20:
+                        cc20 = cc_value
+                    elif cc_number == 21:
+                        cc21 = cc_value
+            if "LH" in trackname:
+                lh_events.append([pitch, velocity, int(note_start_tick), int(note_end_tick - note_start_tick), note_channel, cc16, cc17, cc18, cc19, cc20, cc21])
+            elif "RH" in trackname:
+                rh_events.append([pitch, velocity, int(note_start_tick), int(note_end_tick - note_start_tick), note_channel, cc16, cc17, cc18, cc19, cc20, cc21])
+            elif "Melee" in trackname:
+                melee_events.append([pitch, velocity, int(note_start_tick), int(note_end_tick - note_start_tick), note_channel, cc16, cc17, cc18, cc19, cc20, cc21])
+    return lh_events, rh_events, melee_events
+
+
+def get_tempo_data(difficulty):
+    tempo_count = RPR_CountTempoTimeSigMarkers(0)
+    tempos = []
+    for i in range(tempo_count):
+        retval, proj, index, time_pos, measure_pos, beat_pos, bpm, timesig_num, timesig_denom, tempo_bool = RPR_GetTempoTimeSigMarker(0, i, 0, 0, 0, 0, 0, 0, 0)
+        tempos.append([bpm, seconds_to_ticks(time_pos, difficulty)])
+    return tempos
+
+
+def convert_to_cues(difficulty):
+    note_data = get_midi_events(get_tracks_matching_names([difficulty])[0])
+    tempo_data = get_tempo_data(difficulty)
+    if difficulty == "Expert":
+        difficulty = "expert"
+    elif difficulty == "Hard":
+        difficulty = "advanced"
+    elif difficulty == "Normal":
+        difficulty = "moderate"
+    elif difficulty == "Easy":
+        difficulty = "beginner"
+    cues_filename = os.path.dirname(get_curr_project_filename()) + os.sep + difficulty + ".cues"
+    cues_data = cues()
+    count = 0
+    for data in tempo_data:
+        cues_data.add_tempo(tick=data[1], tempo=data[0])
+    for data in note_data:
+        hand = 0
+        if count == 0:
+            hand = 2
+        elif count == 1:
+            hand = 1
+        for d in data:
+            tick = d[2]
+            tickLength = d[3]
+            pitch = d[0]
+            velocity = d[1]
+            behavior = 0
+            x = 0
+            y = 0
+            z = 0
+            if is_chain(d[4]):
+                behavior = 4
+            elif is_chain_node(d[4]):
+                behavior = 5
+            elif is_horizontal(d[4]):
+                behavior = 2
+            elif is_melee(pitch):
+                behavior = 6
+            elif is_sustain(tick, tick + tickLength):
+                behavior = 3
+            elif is_vertical(d[4]):
+                behavior = 1
+            if d[5] != -1:
+                x = (d[5] - 64) / 64.0
+            if d[6] != -1:
+                y = (d[6] - 64) / 64.0
+            if d[7] != -1:
+                z = (d[7] - 64) / 64.0
+            if d[8] != -1:
+                x = d[8] - 64
+            if d[9] != -1:
+                y = d[9] - 64
+            if d[10] != -1:
+                z = d[10] - 64
+            if pitch < 107:
+                cues_data.add_cue(tick=tick, tickLength=tickLength,pitch=pitch, velocity=velocity, xOffset=x, yOffset=y, zOffset=z, handType=hand, behavior=behavior)
+            else:
+                cues_data.add_repeater(tick=tick, tickLength=tickLength, pitch=pitch, velocity=velocity, handType=hand)
+        count = count + 1
+    if cues_data.cues == []:
+        return False
+    cues_data.save(cues_filename)
+    return cues_filename
 
 
 """
@@ -900,6 +1126,11 @@ class mainApp(Frame):
         desc_filename = os.path.dirname(project_path) + os.sep + "song.desc"
         midi_filename = project_path.replace(".rpp", ".mid")
 
+        expert_cues_filename = convert_to_cues("Expert")
+        advanced_cues_filename = convert_to_cues("Hard")
+        moderate_cues_filename = convert_to_cues("Normal")
+        beginner_cues_filename = convert_to_cues("Easy")
+
         desc_file.moggSong = os.path.basename(main_moggsong_filename)
         desc_file.midiFile = os.path.basename(midi_filename)
         desc_file.songID = self.song_id_entry_var.get()
@@ -912,7 +1143,6 @@ class mainApp(Frame):
         desc_file.prerollSeconds = float(self.preroll_seconds_entry_var.get())
         desc_file.previewStartSeconds = float(self.preview_start_seconds_entry_var.get())
         desc_file.author = self.author_entry_var.get()
-        desc_file.useMidiForCues = True
 
         song_moggsong.moggPath = os.path.basename(main_mogg_filename)
         song_moggsong.midiPath = os.path.basename(midi_filename)
@@ -978,6 +1208,14 @@ class mainApp(Frame):
         f.write(midi_filename, os.path.basename(midi_filename))
         f.write(main_mogg_filename, os.path.basename(main_mogg_filename))
         f.write(main_moggsong_filename, os.path.basename(main_moggsong_filename))
+        if expert_cues_filename:
+            f.write(expert_cues_filename, os.path.basename(expert_cues_filename))
+        if advanced_cues_filename:
+            f.write(advanced_cues_filename, os.path.basename(advanced_cues_filename))
+        if moderate_cues_filename:
+            f.write(moderate_cues_filename, os.path.basename(moderate_cues_filename))
+        if beginner_cues_filename:
+            f.write(beginner_cues_filename, os.path.basename(beginner_cues_filename))
         if extras_checkbox == 1:
             f.write(extras_mogg_filename, os.path.basename(extras_mogg_filename))
             f.write(extras_moggsong_filename, os.path.basename(extras_moggsong_filename))
@@ -990,23 +1228,22 @@ class mainApp(Frame):
 
         os.remove(desc_filename)
         os.remove(midi_filename)
-        try:
-            os.remove(main_ogg_filename)
-        except:
-            pass
+        os.remove(main_ogg_filename)
         os.remove(main_moggsong_filename)
+        if expert_cues_filename:
+            os.remove(expert_cues_filename)
+        if advanced_cues_filename:
+            os.remove(advanced_cues_filename)
+        if moderate_cues_filename:
+            os.remove(moderate_cues_filename)
+        if beginner_cues_filename:
+            os.remove(beginner_cues_filename)
         if extras_checkbox == 1:
-            try:
-                os.remove(extras_ogg_filename)
-            except:
-                pass
+            os.remove(extras_ogg_filename)
             os.remove(extras_moggsong_filename)
         if sustains_checkbox == 1:
-            try:
-                os.remove(sustain_l_ogg_filename)
-                os.remove(sustain_r_ogg_filename)
-            except:
-                pass
+            os.remove(sustain_l_ogg_filename)
+            os.remove(sustain_r_ogg_filename)
             os.remove(sustain_l_moggsong_filename)
             os.remove(sustain_r_moggsong_filename)
 
