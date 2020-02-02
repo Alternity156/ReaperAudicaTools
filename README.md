@@ -8,6 +8,10 @@ These tools also use the project RPP for various stuff, so you will have to use 
 # audica_maker.py
 This will make an audica file. Assumes you are using the template rpp. If you want to use your own template, for now you can edit the track names in the script. I may add a way to edit this in the GUI in the future.
 
+When making the audica file, the script will leave mogg files in your reaper project folder. These files are not cleaned up so that you can make an audica file much faster if need be (ex. changed metadata or moggsong values). The "Don't Render" option will do that.
+
+If you already made the audica file and all you did is authoring changes, you have the option to only change the MIDI file for the quickest testing possible.
+
 This script requires ogg2mogg.exe.
 
 # cues_export.py
