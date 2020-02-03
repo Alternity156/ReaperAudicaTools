@@ -12,7 +12,7 @@ When making the audica file, the script will leave mogg files in your reaper pro
 
 If you already made the audica file and all you did is authoring changes, you have the option to only change the MIDI file for the quickest testing possible.
 
-The script will freeze until the process is complete.
+The script and REAPER will freeze until the process is complete.
 
 This script requires ogg2mogg.exe.
 
