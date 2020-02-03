@@ -21,3 +21,6 @@ This script will ask you which difficulty to export and then will write a cues f
 
 # cues_import.py
 This script will ask you which difficulty you want to import a cues file into.
+
+# reaper_move_xxx.lua
+These scripts don't require the python shenanigans, just have to set them in the MIDI editor's action menu. They will move selected targets in their respective direction for one small CC value. They support big offset and therefore will go off grid.
