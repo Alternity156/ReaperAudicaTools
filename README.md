@@ -24,3 +24,6 @@ This script will ask you which difficulty you want to import a cues file into.
 
 # reaper_move_xxx.lua
 These scripts don't require the python shenanigans, just have to set them in the MIDI editor's action menu. They will move selected targets in their respective direction for one small CC value. They support big offset and therefore will go off grid.
+
+# reaper_fix_side_distance.lua
+This will make the targets on the side a bit further away using Z offset. It will modify every targets in every tracks.
