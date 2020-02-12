@@ -19,6 +19,7 @@ from collections import OrderedDict
 from tkinter.ttk import Notebook
 from subprocess import Popen
 from zipfile import ZipFile
+from threading import Thread
 
 import os
 import time
@@ -457,6 +458,19 @@ class rppHandler:
 """
 Usefull functions, may be moved in their own py file eventually along with the rppHandler class.
 """
+
+class ThreadWithReturnValue(Thread):
+    def __init__(self, group=None, target=None, name=None,
+                 args=(), kwargs={}, Verbose=None):
+        Thread.__init__(self, group, target, name, args, kwargs, Verbose)
+        self._return = None
+    def run(self):
+        if self._Thread__target is not None:
+            self._return = self._Thread__target(*self._Thread__args,
+                                                **self._Thread__kwargs)
+    def join(self):
+        Thread.join(self)
+        return self._return
 
 
 def get_reaper_install_dir():
@@ -1094,12 +1108,33 @@ class mainApp(Frame):
         midi_filename = project_path.replace(".rpp", ".mid")
         audica_filename = os.path.dirname(project_path) + os.sep + self.song_id_entry_var.get() + ".audica"
         temp_audica_file = os.path.dirname(project_path) + os.sep + "temp.audica"
+        def remove_file(file):
+            f_in = ZipFile(audica_filename, "r")
+            f_out = ZipFile(temp_audica_file, "w")
+            for item in f_in.infolist():
+                buffer = f_in.read(item.filename)
+                if item.filename != file:
+                    f_out.writestr(item, buffer)
+            f_out.close()
+            f_in.close()
+            os.remove(audica_filename)
+            os.rename(temp_audica_file, audica_filename)
+        remove_file(midi_filename)
+        expert_cues_filename = convert_to_cues("Expert")
+        #advanced_cues_filename = convert_to_cues("Hard")
+        #moderate_cues_filename = convert_to_cues("Normal")
+        #beginner_cues_filename = convert_to_cues("Easy")
         f_in = ZipFile(audica_filename, "r")
         f_out = ZipFile(temp_audica_file, "w")
-        for item in f_in.infolist():
-            buffer = f_in.read(item.filename)
-            if item.filename[-4:] != ".mid":
-                f_out.writestr(item, buffer)
+        if expert_cues_filename:
+            remove_file(expert_cues_filename)
+            #f_out.write(expert_cues_filename, os.path.basename(expert_cues_filename))
+        #if advanced_cues_filename:
+        #    f_out.write(advanced_cues_filename, os.path.basename(advanced_cues_filename))
+        #if moderate_cues_filename:
+        #    f_out.write(moderate_cues_filename, os.path.basename(moderate_cues_filename))
+        #if beginner_cues_filename:
+        #    f_out.write(beginner_cues_filename, os.path.basename(beginner_cues_filename))
         f_out.write(midi_filename, os.path.basename(midi_filename))
         f_out.close()
         f_in.close()
@@ -1193,12 +1228,24 @@ class mainApp(Frame):
         desc_file.save_desc_file(desc_filename)
 
         if self.dont_render_checkbox_var.get() == 0:
+            if os.path.exists(main_mogg_filename):
+                os.remove(main_mogg_filename)
             ogg2mogg(main_ogg_filename, main_mogg_filename)
+            time.sleep(0.5)
             if extras_checkbox == 1:
+                if os.path.exists(extras_mogg_filename):
+                    os.remove(extras_mogg_filename)
                 ogg2mogg(extras_ogg_filename, extras_mogg_filename)
+                time.sleep(0.5)
             if sustains_checkbox == 1:
+                if os.path.exists(sustain_l_mogg_filename):
+                    os.remove(sustain_l_mogg_filename)
+                if os.path.exists(sustain_r_mogg_filename):
+                    os.remove(sustain_r_mogg_filename)
                 ogg2mogg(sustain_l_ogg_filename, sustain_l_mogg_filename)
+                time.sleep(0.5)
                 ogg2mogg(sustain_r_ogg_filename, sustain_r_mogg_filename)
+                time.sleep(0.5)
 
         audica_filename = os.path.dirname(project_path) + os.sep + self.song_id_entry_var.get() + ".audica"
 
