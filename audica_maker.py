@@ -528,8 +528,8 @@ def seconds_to_ticks(seconds, difficulty):
     return ticks
 
 
-def is_sustain(tick, end_tick):
-    return end_tick - tick > ticks_per_quarter
+def is_sustain(tick, end_tick, min_ticks):
+    return end_tick - tick >= min_ticks
 
 
 def is_melee(pitch):
@@ -617,7 +617,7 @@ def get_tempo_data(difficulty):
     return tempos
 
 
-def convert_to_cues(difficulty):
+def convert_to_cues(difficulty, min_ticks):
     note_data = get_midi_events(get_tracks_matching_names([difficulty])[0])
     tempo_data = get_tempo_data(difficulty)
     if difficulty == "Expert":
@@ -656,7 +656,7 @@ def convert_to_cues(difficulty):
                 behavior = 2
             elif is_melee(pitch):
                 behavior = 6
-            elif is_sustain(tick, tick + tickLength):
+            elif is_sustain(tick, tick + tickLength, min_ticks):
                 behavior = 3
             elif is_vertical(d[4]):
                 behavior = 1
@@ -713,6 +713,7 @@ class mainApp(Frame):
         self.sample_rate_list = ["44100", "48000"]
         self.note_list = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"]
         self.drum_kit_list = ["Cosmic Cafe", "Crunch", "Destruct", "God City", "HM-X0X", "M-Cue", "Custom"]
+        self.sustain_length_list = ["240", "360", "480"]
 
         """
         Window setup
@@ -823,24 +824,42 @@ class mainApp(Frame):
         self.high_score_event_dropdown.config(width=10)
         self.high_score_event_dropdown.grid()
 
-        self.override_song_id_checkbox_var = IntVar()
-        self.override_song_id_checkbox = Checkbutton(self.tab1, variable=self.override_song_id_checkbox_var,
-                                                     text="Override songID variable")
-        self.override_song_id_checkbox.grid(row=9, columnspan=3)
+        self.export_cues_section = LabelFrame(self.tab1, text="Cues Export")
+        self.export_cues_section.grid(row=9, columnspan=3)
+
+        self.export_cues_checkbox_var = IntVar()
+        self.export_cues_checkbox = Checkbutton(self.export_cues_section, variable=self.export_cues_checkbox_var,
+                                                text="Export cues")
+        self.export_cues_checkbox.grid(row=0, column=0)
+
+        self.sustain_length_dropdown_var = StringVar()
+        self.sustain_length_dropdown_var.set("480")
+        self.sustain_length_dropdown = OptionMenu(self.export_cues_section, self.sustain_length_dropdown_var,
+                                                  *self.sustain_length_list)
+        self.sustain_length_dropdown.grid(row=0, column=1)
+
+        self.sustain_length_label = Label(self.export_cues_section, text="Sustain min length")
+        self.sustain_length_label.grid(row=0, column=2)
+
+        self.wip_checkbox_var = IntVar()
+        self.wip_checkbox = Checkbutton(self.tab1, variable=self.wip_checkbox_var, text="Mark as WIP")
+        self.wip_checkbox.grid(row=10, column=0, columnspan=1)
 
         self.dont_render_checkbox_var = IntVar()
         self.dont_render_checkbox = Checkbutton(self.tab1, variable=self.dont_render_checkbox_var,
                                                 text="Don't render audio")
-        self.dont_render_checkbox.grid(row=10, columnspan=3)
+        self.dont_render_checkbox.grid(row=10, column=1, columnspan=2)
+
+        self.override_song_id_checkbox_var = IntVar()
+        self.override_song_id_checkbox = Checkbutton(self.tab1, variable=self.override_song_id_checkbox_var,
+                                                     text="Override songID variable")
+        self.override_song_id_checkbox.grid(row=11, columnspan=3)
 
         self.save_metadata_button = Button(self.tab1, text="Save metadata and moggsong", command=self.save_metadata)
-        self.save_metadata_button.grid(row=11, columnspan=3)
-
-        self.update_midi_button = Button(self.tab1, text="Update MIDI", command=self.update_midi)
-        self.update_midi_button.grid(row=12, columnspan=3)
+        self.save_metadata_button.grid(row=13, columnspan=3)
 
         self.start_button = Button(self.tab1, text="Make Audica file", command=self.handle_start)
-        self.start_button.grid(row=13, columnspan=3)
+        self.start_button.grid(row=14, columnspan=3)
 
         self.project_needed_explaination = Label(self.tab1, text="Your project file needs to be updated (saved).\n" \
                                                                  "Make sure to save your project before rendering.\n\n" \
@@ -851,7 +870,7 @@ class mainApp(Frame):
                                                                  "projectfilename_sustain_r.mogg in the project\n" \
                                                                  "folder, matching the chosen track in the Settings\n" \
                                                                  "tab.")
-        self.project_needed_explaination.grid(row=14, columnspan=3, sticky="W")
+        self.project_needed_explaination.grid(row=15, columnspan=3, sticky="W")
 
         """
         Tab 2
@@ -1054,6 +1073,7 @@ class mainApp(Frame):
 
         self.title_entry_var.trace("w", self.songID_entry_tracer)
         self.author_entry_var.trace("w", self.songID_entry_tracer)
+        self.wip_checkbox_var.trace("w", self.songID_entry_tracer)
         self.override_song_id_checkbox_var.trace("w", self.songID_override_tracer)
         self.target_drums_dropdown_var.trace("w", self.target_drums_tracer)
 
@@ -1102,46 +1122,6 @@ class mainApp(Frame):
 
         return project_path
 
-    def update_midi(self):
-        project_path = self.get_project_path()
-        export_midi()
-        midi_filename = project_path.replace(".rpp", ".mid")
-        audica_filename = os.path.dirname(project_path) + os.sep + self.song_id_entry_var.get() + ".audica"
-        temp_audica_file = os.path.dirname(project_path) + os.sep + "temp.audica"
-        def remove_file(file):
-            f_in = ZipFile(audica_filename, "r")
-            f_out = ZipFile(temp_audica_file, "w")
-            for item in f_in.infolist():
-                buffer = f_in.read(item.filename)
-                if item.filename != file:
-                    f_out.writestr(item, buffer)
-            f_out.close()
-            f_in.close()
-            os.remove(audica_filename)
-            os.rename(temp_audica_file, audica_filename)
-        remove_file(midi_filename)
-        expert_cues_filename = convert_to_cues("Expert")
-        #advanced_cues_filename = convert_to_cues("Hard")
-        #moderate_cues_filename = convert_to_cues("Normal")
-        #beginner_cues_filename = convert_to_cues("Easy")
-        f_in = ZipFile(audica_filename, "r")
-        f_out = ZipFile(temp_audica_file, "w")
-        if expert_cues_filename:
-            remove_file(expert_cues_filename)
-            #f_out.write(expert_cues_filename, os.path.basename(expert_cues_filename))
-        #if advanced_cues_filename:
-        #    f_out.write(advanced_cues_filename, os.path.basename(advanced_cues_filename))
-        #if moderate_cues_filename:
-        #    f_out.write(moderate_cues_filename, os.path.basename(moderate_cues_filename))
-        #if beginner_cues_filename:
-        #    f_out.write(beginner_cues_filename, os.path.basename(beginner_cues_filename))
-        f_out.write(midi_filename, os.path.basename(midi_filename))
-        f_out.close()
-        f_in.close()
-        os.remove(audica_filename)
-        os.remove(midi_filename)
-        os.rename(temp_audica_file, audica_filename)
-
     def make_audica(self):
         extras_checkbox = self.render_extras_checkbox_var.get()
         sustains_checkbox = self.render_sustains_checkbox_var.get()
@@ -1161,10 +1141,12 @@ class mainApp(Frame):
         desc_filename = os.path.dirname(project_path) + os.sep + "song.desc"
         midi_filename = project_path.replace(".rpp", ".mid")
 
-        expert_cues_filename = convert_to_cues("Expert")
-        advanced_cues_filename = convert_to_cues("Hard")
-        moderate_cues_filename = convert_to_cues("Normal")
-        beginner_cues_filename = convert_to_cues("Easy")
+        if self.export_cues_checkbox_var == 1:
+            sustain_min_ticks = int(self.sustain_length_dropdown_var.get())
+            expert_cues_filename = convert_to_cues("Expert", sustain_min_ticks)
+            advanced_cues_filename = convert_to_cues("Hard", sustain_min_ticks)
+            moderate_cues_filename = convert_to_cues("Normal", sustain_min_ticks)
+            beginner_cues_filename = convert_to_cues("Easy", sustain_min_ticks)
 
         desc_file.moggSong = os.path.basename(main_moggsong_filename)
         desc_file.midiFile = os.path.basename(midi_filename)
@@ -1178,6 +1160,8 @@ class mainApp(Frame):
         desc_file.prerollSeconds = float(self.preroll_seconds_entry_var.get())
         desc_file.previewStartSeconds = float(self.preview_start_seconds_entry_var.get())
         desc_file.author = self.author_entry_var.get()
+        if self.export_cues_checkbox_var == 0:
+            desc_file.useMidiForCues = True
 
         song_moggsong.moggPath = os.path.basename(main_mogg_filename)
         song_moggsong.midiPath = os.path.basename(midi_filename)
@@ -1231,21 +1215,21 @@ class mainApp(Frame):
             if os.path.exists(main_mogg_filename):
                 os.remove(main_mogg_filename)
             ogg2mogg(main_ogg_filename, main_mogg_filename)
-            time.sleep(0.5)
+            time.sleep(1)
             if extras_checkbox == 1:
                 if os.path.exists(extras_mogg_filename):
                     os.remove(extras_mogg_filename)
                 ogg2mogg(extras_ogg_filename, extras_mogg_filename)
-                time.sleep(0.5)
+                time.sleep(1)
             if sustains_checkbox == 1:
                 if os.path.exists(sustain_l_mogg_filename):
                     os.remove(sustain_l_mogg_filename)
                 if os.path.exists(sustain_r_mogg_filename):
                     os.remove(sustain_r_mogg_filename)
                 ogg2mogg(sustain_l_ogg_filename, sustain_l_mogg_filename)
-                time.sleep(0.5)
+                time.sleep(1)
                 ogg2mogg(sustain_r_ogg_filename, sustain_r_mogg_filename)
-                time.sleep(0.5)
+                time.sleep(1)
 
         audica_filename = os.path.dirname(project_path) + os.sep + self.song_id_entry_var.get() + ".audica"
 
@@ -1255,14 +1239,15 @@ class mainApp(Frame):
         f.write(midi_filename, os.path.basename(midi_filename))
         f.write(main_mogg_filename, os.path.basename(main_mogg_filename))
         f.write(main_moggsong_filename, os.path.basename(main_moggsong_filename))
-        if expert_cues_filename:
-            f.write(expert_cues_filename, os.path.basename(expert_cues_filename))
-        if advanced_cues_filename:
-            f.write(advanced_cues_filename, os.path.basename(advanced_cues_filename))
-        if moderate_cues_filename:
-            f.write(moderate_cues_filename, os.path.basename(moderate_cues_filename))
-        if beginner_cues_filename:
-            f.write(beginner_cues_filename, os.path.basename(beginner_cues_filename))
+        if self.export_cues_checkbox_var == 1:
+            if expert_cues_filename:
+                f.write(expert_cues_filename, os.path.basename(expert_cues_filename))
+            if advanced_cues_filename:
+                f.write(advanced_cues_filename, os.path.basename(advanced_cues_filename))
+            if moderate_cues_filename:
+                f.write(moderate_cues_filename, os.path.basename(moderate_cues_filename))
+            if beginner_cues_filename:
+                f.write(beginner_cues_filename, os.path.basename(beginner_cues_filename))
         if extras_checkbox == 1:
             f.write(extras_mogg_filename, os.path.basename(extras_mogg_filename))
             f.write(extras_moggsong_filename, os.path.basename(extras_moggsong_filename))
@@ -1480,9 +1465,12 @@ class mainApp(Frame):
         self.dont_render_checkbox_var.set(data["dont_render"])
 
     def songID_entry_tracer(self, *args):
+        id_string = self.title_entry_var.get().replace(" ", "")
         if self.override_song_id_checkbox_var.get() == 0:
+            if self.wip_checkbox_var.get() == 1:
+                id_string = id_string + "WIP"
             self.song_id_entry_var.set(
-                self.title_entry_var.get().replace(" ", "") + "-" + self.author_entry_var.get().replace(" ", ""))
+                id_string + "-" + self.author_entry_var.get().replace(" ", ""))
 
     def songID_override_tracer(self, *args):
         if self.override_song_id_checkbox_var.get() == 0:
