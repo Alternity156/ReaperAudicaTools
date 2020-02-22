@@ -1429,7 +1429,10 @@ class mainApp(Frame):
                 "sustain_audio_vol_left": self.sustain_audio_vol_left_slider_var.get(),
                 "sustain_audio_vol_right": self.sustain_audio_vol_right_slider_var.get(),
                 "dont_render": self.dont_render_checkbox_var.get(),
-                "override_song_id": self.override_song_id_checkbox_var.get()
+                "override_song_id": self.override_song_id_checkbox_var.get(),
+                "export_cues": self.export_cues_checkbox_var.get(),
+                "sustain_min_length": self.sustain_length_dropdown_var.get(),
+                "mark_as_wip": self.wip_checkbox_var.get()
                 }
         with open(self.metadata_file, "w") as f:
             json.dump(data, f, indent=4)
@@ -1446,9 +1449,13 @@ class mainApp(Frame):
         self.preroll_seconds_entry_var.set(data["preroll_seconds"])
         self.preview_start_seconds_entry_var.set(data["preview_start_seconds"])
         self.end_pitch_adjust_entry_var.set(data["end_pitch_adjust"])
-        self.target_drums_entry_var.set(data["target_drums"])
+        self.target_drums_entry_var.set(data["target_drums_path"])
         self.target_drums_dropdown_var.set(data["target_drums_selection"])
         self.song_end_event_dropdown_var.set(data["end_event"])
+        self.dont_render_checkbox_var.set(data["dont_render"])
+        self.export_cues_checkbox_var.set(data["export_cues"])
+        self.sustain_length_dropdown_var.set(data["sustain_min_length"])
+        self.wip_checkbox_var.set(data["mark_as_wip"])
         self.high_score_event_dropdown_var.set(data["high_score_event"])
         self.main_audio_pan_left_slider_var.set(data["main_audio_pan_left"])
         self.main_audio_pan_right_slider_var.set(data["main_audio_pan_right"])
@@ -1462,7 +1469,7 @@ class mainApp(Frame):
         self.sustain_audio_pan_right_slider_var.set(data["sustain_audio_pan_right"])
         self.sustain_audio_vol_left_slider_var.set(data["sustain_audio_vol_left"])
         self.sustain_audio_vol_right_slider_var.set(data["sustain_audio_vol_right"])
-        self.dont_render_checkbox_var.set(data["dont_render"])
+
 
     def songID_entry_tracer(self, *args):
         id_string = self.title_entry_var.get().replace(" ", "")
