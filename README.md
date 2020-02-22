@@ -10,8 +10,6 @@ This will make an audica file. Assumes you are using the template rpp. If you wa
 
 When making the audica file, the script will leave mogg files in your reaper project folder. These files are not cleaned up so that you can make an audica file much faster if need be (ex. changed metadata or moggsong values). The "Don't Render" option will do that.
 
-If you already made the audica file and all you did is authoring changes, you have the option to only change the MIDI file for the quickest testing possible.
-
 The script and REAPER will freeze until the process is complete.
 
 This script requires ogg2mogg.exe.
