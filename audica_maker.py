@@ -1141,7 +1141,7 @@ class mainApp(Frame):
         desc_filename = os.path.dirname(project_path) + os.sep + "song.desc"
         midi_filename = project_path.replace(".rpp", ".mid")
 
-        if self.export_cues_checkbox_var == 1:
+        if self.export_cues_checkbox_var.get() == 1:
             sustain_min_ticks = int(self.sustain_length_dropdown_var.get())
             expert_cues_filename = convert_to_cues("Expert", sustain_min_ticks)
             advanced_cues_filename = convert_to_cues("Hard", sustain_min_ticks)
@@ -1239,7 +1239,7 @@ class mainApp(Frame):
         f.write(midi_filename, os.path.basename(midi_filename))
         f.write(main_mogg_filename, os.path.basename(main_mogg_filename))
         f.write(main_moggsong_filename, os.path.basename(main_moggsong_filename))
-        if self.export_cues_checkbox_var == 1:
+        if self.export_cues_checkbox_var.get() == 1:
             if expert_cues_filename:
                 f.write(expert_cues_filename, os.path.basename(expert_cues_filename))
             if advanced_cues_filename:
